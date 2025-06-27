@@ -45,11 +45,39 @@ async function getConfig() {
     }
     if (!fs.existsSync('.env')) fs.writeFileSync('.env', '')
     let envContent = fs.readFileSync('.env', 'utf8')
-    if (!envContent.match(/DISCORD_TOKEN=/)) envContent += `\nDISCORD_TOKEN=${token}`
-    if (!envContent.match(/DEBUG_MODE=/)) envContent += `\nDEBUG_MODE=${debug}`
-    if (!envContent.match(/PROXIES_ENABLED=/)) envContent += `\nPROXIES_ENABLED=${proxiesEnabled}`
-    if (!envContent.match(/PROXY_SOURCE=/)) envContent += `\nPROXY_SOURCE=${proxySource}`
-    if (!envContent.match(/PROXY_FILE=/)) envContent += `\nPROXY_FILE=${proxyFile}`
+    
+    // Update or add token
+    if (envContent.match(/DISCORD_TOKEN=/)) {
+        envContent = envContent.replace(/DISCORD_TOKEN=.*/g, `DISCORD_TOKEN=${token}`)
+    } else {
+        envContent += `\nDISCORD_TOKEN=${token}`
+    }
+    
+    // Update or add other settings
+    if (envContent.match(/DEBUG_MODE=/)) {
+        envContent = envContent.replace(/DEBUG_MODE=.*/g, `DEBUG_MODE=${debug}`)
+    } else {
+        envContent += `\nDEBUG_MODE=${debug}`
+    }
+    
+    if (envContent.match(/PROXIES_ENABLED=/)) {
+        envContent = envContent.replace(/PROXIES_ENABLED=.*/g, `PROXIES_ENABLED=${proxiesEnabled}`)
+    } else {
+        envContent += `\nPROXIES_ENABLED=${proxiesEnabled}`
+    }
+    
+    if (envContent.match(/PROXY_SOURCE=/)) {
+        envContent = envContent.replace(/PROXY_SOURCE=.*/g, `PROXY_SOURCE=${proxySource}`)
+    } else {
+        envContent += `\nPROXY_SOURCE=${proxySource}`
+    }
+    
+    if (envContent.match(/PROXY_FILE=/)) {
+        envContent = envContent.replace(/PROXY_FILE=.*/g, `PROXY_FILE=${proxyFile}`)
+    } else {
+        envContent += `\nPROXY_FILE=${proxyFile}`
+    }
+    
     fs.writeFileSync('.env', envContent.trim() + '\n')
     return { token, debug, proxiesEnabled, proxySource, proxyFile }
 }

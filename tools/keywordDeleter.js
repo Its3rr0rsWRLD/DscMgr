@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import fs from 'fs';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
-export const name = 'Delete Messages';
+export const name = 'Keyword Deleter';
 export const description = 'Find and delete your Discord messages by keyword.';
 
 function logAll(config, data) {
