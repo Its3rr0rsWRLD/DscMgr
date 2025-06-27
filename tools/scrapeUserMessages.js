@@ -157,37 +157,87 @@ async function fetchChannels(token, guildId, config) {
 }
 
 async function searchMessages(token, channelId, authorId, config) {
-    while (true) {
+    let retryCount = 0;
+    const maxRetries = 5;
+    while (retryCount < maxRetries) {
         try {
-            const url = `https://discord.com/api/v9/channels/${channelId}/messages/search?author_id=${authorId}`
-            const proxyConfig = createProxyAxiosConfig(config)
-            const response = await axios.get(url, { 
+            const url = `https://discord.com/api/v9/channels/${channelId}/messages/search?author_id=${authorId}`;
+            const proxyConfig = createProxyAxiosConfig(config);
+            const response = await axios.get(url, {
                 headers: getDiscordHeaders(token),
                 ...proxyConfig,
                 timeout: 10000
-            })
-            logAll(config, { action: 'searchMessages', url, response: response.data })
-            
-            // Add a small delay to prevent overwhelming the API
-            await sleep(100)
-            
-            return response.data?.messages?.flat() || []
+            });
+            logAll(config, { action: 'searchMessages', url, response: response.data });
+            await sleep(100);
+            return response.data?.messages?.flat() || [];
         } catch (err) {
             if (err.response && err.response.status === 429) {
-                const retry = (err.response.data.retry_after || 1) * 1000
-                console.log(chalk.yellow(`Rate limited, waiting ${retry}ms...`))
-                logAll(config, { action: 'searchMessages', rateLimited: true, retry })
-                await sleep(retry)
-                continue
+                const retryAfter = err.response.data.retry_after || 1;
+                const retryMs = retryAfter * 1000;
+                console.log(chalk.yellow(`⏳ Rate limited! Waiting ${retryAfter} seconds before retry (attempt ${retryCount + 1}/${maxRetries})...`));
+                logAll(config, { action: 'searchMessages', channelId, rateLimited: true, retry: retryMs, retryCount });
+                await sleep(retryMs);
+                retryCount++;
+                continue;
             }
             if (err.response && err.response.status === 403) {
-                logAll(config, { action: 'searchMessages', channelId, error: 'No permission to access channel (403)' })
-                return []
+                logAll(config, { action: 'searchMessages', channelId, error: 'No permission to access channel (403)' });
+                return [];
             }
-            logAll(config, { action: 'searchMessages', url, error: err.toString() })
-            return []
+            if (retryCount < maxRetries - 1) {
+                console.log(chalk.yellow(`⚠️  Error searching messages in channel ${channelId}: ${err.response?.status || err.message}. Retrying in 2 seconds... (${retryCount + 1}/${maxRetries})`));
+                retryCount++;
+                await sleep(2000);
+                continue;
+            }
+            logAll(config, { action: 'searchMessages', channelId, error: err.toString(), retryCount });
+            return [];
         }
     }
+    return [];
+}
+
+async function searchMessagesInGuild(token, guildId, authorId, config) {
+    let retryCount = 0;
+    const maxRetries = 5;
+    while (retryCount < maxRetries) {
+        try {
+            const url = `https://discord.com/api/v9/guilds/${guildId}/messages/search?author_id=${authorId}`;
+            const proxyConfig = createProxyAxiosConfig(config);
+            const response = await axios.get(url, {
+                headers: getDiscordHeaders(token),
+                ...proxyConfig,
+                timeout: 10000
+            });
+            logAll(config, { action: 'searchMessagesInGuild', url, response: response.data });
+            await sleep(100);
+            return response.data?.messages?.flat() || [];
+        } catch (err) {
+            if (err.response && err.response.status === 429) {
+                const retryAfter = err.response.data.retry_after || 1;
+                const retryMs = retryAfter * 1000;
+                console.log(chalk.yellow(`⏳ Rate limited! Waiting ${retryAfter} seconds before retry (attempt ${retryCount + 1}/${maxRetries})...`));
+                logAll(config, { action: 'searchMessagesInGuild', guildId, rateLimited: true, retry: retryMs, retryCount });
+                await sleep(retryMs);
+                retryCount++;
+                continue;
+            }
+            if (err.response && err.response.status === 403) {
+                logAll(config, { action: 'searchMessagesInGuild', guildId, error: 'No permission to access guild (403)' });
+                return [];
+            }
+            if (retryCount < maxRetries - 1) {
+                console.log(chalk.yellow(`⚠️  Error searching messages in guild ${guildId}: ${err.response?.status || err.message}. Retrying in 2 seconds... (${retryCount + 1}/${maxRetries})`));
+                retryCount++;
+                await sleep(2000);
+                continue;
+            }
+            logAll(config, { action: 'searchMessagesInGuild', guildId, error: err.toString(), retryCount });
+            return [];
+        }
+    }
+    return [];
 }
 
 export async function run(config) {
@@ -240,83 +290,71 @@ export async function run(config) {
     ])
 
     let guildIds = []
+    
     if (guildChoice === 'all') {
         guildIds = mutualGuilds.map(g => g.id)
     } else {
         guildIds = [guildChoice]
     }
-
+    
     let totalMessages = 0
     let allMessages = []
-    let processedChannels = 0
-    let totalChannels = 0
 
-    // First, count total channels for progress
-    console.log(chalk.blue('📊 Calculating total channels to process...'))
-    for (const guildId of guildIds) {
-        try {
-            const channels = await fetchChannels(token, guildId, config)
-            totalChannels += channels.length
-        } catch (err) {
-            console.log(chalk.red(`Failed to fetch channels for guild ${guildId}: ${err.message}`))
-        }
-    }
-
-    console.log(chalk.blue(`🚀 Starting to scrape ${totalChannels} channels across ${guildIds.length} guild(s)...`))
+    console.log(chalk.blue(`🚀 Starting to scrape ${guildIds.length} guild(s)...`))
+    console.log(chalk.gray(`Debug: Guild IDs to process: ${guildIds.join(', ')}`))
+    console.log(chalk.cyan('⚡ Using optimized guild-level search for maximum speed!\n'))
 
     for (const guildId of guildIds) {
         try {
             const guildName = guildChoices.find(g => g.value === guildId)?.name || guildId
-            console.log(chalk.cyan(`\n📂 Processing guild: ${guildName}`))
+            console.log(chalk.cyan(`\n📂 Processing guild: ${guildName} (ID: ${guildId})`))
+
+            console.log(chalk.gray(`   🔍 Searching for messages from user ${userId}...`))
+            const messages = await searchMessagesInGuild(token, guildId, userId, config)
+            console.log(chalk.gray(`   📊 Search completed. Found ${messages.length} messages.`))
             
-            const channels = await fetchChannels(token, guildId, config)
-            
-            for (const channel of channels) {
-                processedChannels++
-                const progress = `(${processedChannels}/${totalChannels})`
-                process.stdout.write(`\r${chalk.gray(`   📈 ${progress} Checking channel: ${channel.name}...`)}`);
-                
-                try {
-                    const messages = await searchMessages(token, channel.id, userId, config)
-                    if (messages.length > 0) {
-                        console.log(`\n${chalk.green(`   ✅ Found ${messages.length} messages in #${channel.name}`)}`);
-                        
-                        // Show preview of messages found
-                        messages.slice(0, 3).forEach(msg => {
-                            let preview = msg.content?.replace(/\n/g, ' ').substring(0, 80) + (msg.content?.length > 80 ? '...' : '')
-                            console.log(chalk.gray(`      💬 ${msg.id}: ${preview}`))
-                        })
-                        
-                        if (messages.length > 3) {
-                            console.log(chalk.gray(`      ... and ${messages.length - 3} more messages`))
-                        }
-                        
-                        allMessages.push(...messages)
-                        totalMessages += messages.length
-                    }
-                } catch (err) {
-                    console.log(`\n${chalk.yellow(`   ⚠️  Skipped channel #${channel.name}: ${err.message}`)}`);
+            if (messages.length > 0) {
+                console.log(chalk.green(`   ✅ Found ${messages.length} messages in ${guildName}`))
+                messages.slice(0, 3).forEach(msg => {
+                    let preview = msg.content?.replace(/\n/g, ' ').substring(0, 80) + (msg.content?.length > 80 ? '...' : '')
+                    console.log(chalk.gray(`      💬 ${msg.id}: ${preview}`))
+                })
+                if (messages.length > 3) {
+                    console.log(chalk.gray(`      ... and ${messages.length - 3} more messages`))
                 }
+                allMessages.push(...messages)
+                totalMessages += messages.length
+            } else {
+                console.log(chalk.yellow(`   ⚠️  No messages found in ${guildName}`))
             }
         } catch (err) {
             console.log(chalk.red(`\nFailed to process guild ${guildId}: ${err.message}`))
+            console.log(chalk.red(`Error details: ${err.stack}`))
         }
     }
 
-    // Clear the progress line
-    process.stdout.write('\r' + ' '.repeat(80) + '\r');
-
-    if (totalMessages === 0) {
-        console.log(chalk.yellow('\n🔍 No messages found from this user in the selected servers.'))
+    process.stdout.write('\r' + ' '.repeat(80) + '\r');    if (totalMessages === 0) {
+        console.log(chalk.yellow('\n🔍 SCRAPING COMPLETED - No Results'))
+        console.log(chalk.yellow('⚠️  No messages found from this user in the selected servers.'))
+        console.log(chalk.gray('This could mean:'))
+        console.log(chalk.gray('   • The user hasn\'t sent any messages in these servers'))
+        console.log(chalk.gray('   • The messages are in channels you don\'t have access to'))
+        console.log(chalk.gray('   • The user ID might be incorrect'))
+        console.log(chalk.green('\n✨ Press any key to return to main menu...'))
         return
     }
 
-    // Save results
     if (!fs.existsSync('saves')) fs.mkdirSync('saves')
     const savePath = path.join('saves', `scrape_${userId}_${Date.now()}.json`)
     fs.writeFileSync(savePath, JSON.stringify(allMessages, null, 2), 'utf8')
     logAll(config, { action: 'saveScrape', savePath, totalMessages })
-    
-    console.log(chalk.green(`\n🎉 Successfully scraped ${totalMessages} message(s) from user ${userId}`))
+      console.log(chalk.green(`\n🎉 SCRAPING COMPLETED! 🎉`))
+    console.log(chalk.green(`✅ Successfully scraped ${totalMessages} message(s) from user ${userId}`))
     console.log(chalk.blue(`💾 Results saved to: ${savePath}`))
+    console.log(chalk.cyan(`\n📊 Scraping Summary:`))
+    console.log(chalk.gray(`   👤 User ID: ${userId}`))
+    console.log(chalk.gray(`   🏢 Servers processed: ${guildIds.length}`))
+    console.log(chalk.gray(`   💬 Total messages found: ${totalMessages}`))
+    console.log(chalk.gray(`   📁 Save file: ${path.basename(savePath)}`))
+    console.log(chalk.green(`\n✨ All done! Press any key to return to main menu...`))
 }

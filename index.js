@@ -74,17 +74,20 @@ async function saveConfig({ token, debug, proxiesEnabled, proxySource, proxyFile
 
 async function loadTools() {
     const toolsDir = path.join(process.cwd(), 'tools')
-    const toolFiles = fs.readdirSync(toolsDir).filter(f => f.endsWith('.js'))
+    const toolFiles = fs.readdirSync(toolsDir).filter(file => file.endsWith('.js'))
     const tools = []
     for (const file of toolFiles) {
-        const toolPath = path.join(toolsDir, file)
-        const toolUrl = pathToFileURL(toolPath).href
-        const tool = await import(toolUrl)
-        tools.push({
-            name: tool.name || file,
-            description: tool.description || '',
-            run: tool.run
-        })
+        try {
+            const toolPath = pathToFileURL(path.join(toolsDir, file)).href
+            const tool = await import(toolPath)
+            tools.push({
+                name: tool.name,
+                description: tool.description,
+                run: tool.run
+            })
+        } catch (error) {
+            console.log(chalk.red(`Failed to load tool ${file}: ${error.message}`))
+        }
     }
     return tools
 }

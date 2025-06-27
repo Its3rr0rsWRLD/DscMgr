@@ -186,7 +186,6 @@ async function deleteMessage(token, channelId, messageId, config) {
             logAll(config, { action: 'deleteMessage', url, response: response.data });
             return response.data;
         } catch (err) {
-            // Log full request details on error for debugging
             const headers = getDiscordHeaders(token);
             const requestDetails = {
                 action: 'deleteMessage',
@@ -226,7 +225,6 @@ async function deleteMessage(token, channelId, messageId, config) {
                 return null;
             }
             
-            // For other errors, retry a few times before giving up
             if (retryCount < maxRetries - 1) {
                 console.log(chalk.yellow(`⚠️  Error deleting message ${messageId}: ${err.response?.status || err.message}. Retrying in 2 seconds... (${retryCount + 1}/${maxRetries})`));
                 retryCount++;
@@ -269,9 +267,6 @@ async function checkMessageExists(token, channelId, messageId, config) {
 }
 
 async function editMessage(token, channelId, messageId, newContent, config) {
-    // Skip pre-checks and attempt edit directly since Discord API can be inconsistent
-    // with message permissions (403 on GET but edit might still work)
-    
     let retryCount = 0;
     const maxRetries = 5;
     
@@ -316,7 +311,6 @@ async function editMessage(token, channelId, messageId, newContent, config) {
                 return null;
             }
             
-            // For other errors, retry a few times before giving up
             if (retryCount < maxRetries - 1) {
                 console.log(chalk.yellow(`⚠️  Error editing message ${messageId}: ${err.response?.status || err.message}. Retrying in 2 seconds... (${retryCount + 1}/${maxRetries})`));
                 retryCount++;
@@ -482,7 +476,7 @@ export async function run(config) {
     
     if (action === 'delete') {
         const { confirm } = await inquirer.prompt([
-            { type: 'confirm', name: 'confirm', message: `Delete all ${foundMessages.length} messages?`, default: false }
+            { type: 'confirm', name: 'confirm', message: `Delete all ${foundMessages.length} messages?`, default: true }
         ]);
         if (!confirm) return;        console.log(chalk.blue(`🗑️  Starting to delete ${foundMessages.length} messages...`));
         
@@ -499,13 +493,11 @@ export async function run(config) {
                     console.log(chalk.yellow(`⚠️  ${progress} Skipped message ${msg.id} in channel ${msg.channel_id} (could not delete)`));
                 }
                 
-                // Add delay between deletions to prevent rate limiting (except for last message)
                 if (i < foundMessages.length - 1) {
-                    await sleep(500); // 500ms delay between deletions
+                    await sleep(500);
                 }
             } catch (err) {
                 console.log(chalk.red(`❌ ${progress} Failed to delete message ${msg.id}: ${err.message}`));
-                // Add a longer delay after errors
                 if (i < foundMessages.length - 1) {
                     await sleep(1000);
                 }
@@ -513,7 +505,7 @@ export async function run(config) {
         }
     } else if (action === 'edit') {
         const { confirm } = await inquirer.prompt([
-            { type: 'confirm', name: 'confirm', message: `Edit ${foundMessages.length} messages to remove "${keyword}"?`, default: false }
+            { type: 'confirm', name: 'confirm', message: `Edit ${foundMessages.length} messages to remove "${keyword}"?`, default: true }
         ]);
         if (!confirm) return;        console.log(chalk.blue(`✏️  Starting to edit ${foundMessages.length} messages...`));
         
@@ -544,13 +536,11 @@ export async function run(config) {
                     }
                 }
                 
-                // Add delay between operations to prevent rate limiting (except for last message)
                 if (i < foundMessages.length - 1) {
-                    await sleep(500); // 500ms delay between operations
+                    await sleep(500);
                 }
             } catch (err) {
                 console.log(chalk.red(`❌ ${progress} Failed to process message ${msg.id}: ${err.message}`));
-                // Add a longer delay after errors
                 if (i < foundMessages.length - 1) {
                     await sleep(1000);
                 }
