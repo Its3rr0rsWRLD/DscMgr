@@ -2,7 +2,6 @@ import inquirer from 'inquirer';
 import axios from 'axios';
 import chalk from 'chalk';
 import fs from 'fs';
-import { HttpsProxyAgent } from 'https-proxy-agent';
 
 export const name = 'Keyword Deleter';
 export const description = 'Find and delete your Discord messages by keyword.';
@@ -21,10 +20,8 @@ function sleep(ms) {
 async function fetchUserId(token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config);
             const response = await axios.get('https://discord.com/api/v9/users/@me', {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig
             });
             logAll(config, { action: 'fetchUserId', response: response.data });
             return response.data.id;
@@ -43,10 +40,8 @@ async function fetchUserId(token, config) {
 
 async function fetchGuildIds(token, config) {    while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config);
             const response = await axios.get('https://discord.com/api/v9/users/@me/guilds', {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             });
             logAll(config, { action: 'fetchGuildIds', response: response.data });
@@ -66,10 +61,8 @@ async function fetchGuildIds(token, config) {    while (true) {
 
 async function fetchGuildChannels(token, guildId, config) {    while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config);
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/channels`, {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             });
             logAll(config, { action: 'fetchGuildChannels', guildId, response: response.data });
@@ -89,9 +82,8 @@ async function fetchGuildChannels(token, guildId, config) {    while (true) {
 
 async function fetchDMChannelIds(token, config) {    while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config);            const response = await axios.get('https://discord.com/api/v9/users/@me/channels', {
+            const response = await axios.get('https://discord.com/api/v9/users/@me/channels', {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             });
             logAll(config, { action: 'fetchDMChannelIds', response: response.data });
@@ -127,10 +119,8 @@ async function searchMessages(token, channelOrGuildId, authorId, keyword, isGuil
       while (true) {
         try {
             const url = urlBase + `&offset=${offset}`;
-            const proxyConfig = createProxyAxiosConfig(config);
             const response = await axios.get(url, {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             });
             
@@ -174,11 +164,9 @@ async function deleteMessage(token, channelId, messageId, config) {
     while (retryCount < maxRetries) {
         try {
             const url = `https://discord.com/api/v9/channels/${channelId}/messages/${messageId}`;
-            const proxyConfig = createProxyAxiosConfig(config);
             const headers = getDiscordHeaders(token);
             const requestConfig = {
                 headers,
-                ...proxyConfig,
                 timeout: 10000
             };
             
@@ -194,7 +182,6 @@ async function deleteMessage(token, channelId, messageId, config) {
                 url: `https://discord.com/api/v9/channels/${channelId}/messages/${messageId}`,
                 method: 'DELETE',
                 headers: headers,
-                proxyEnabled: config.proxiesEnabled || false,
                 error: err.toString(),
                 responseStatus: err.response?.status,
                 responseData: err.response?.data,
@@ -244,10 +231,8 @@ async function deleteMessage(token, channelId, messageId, config) {
 async function checkMessageExists(token, channelId, messageId, config) {
     try {
         const url = `https://discord.com/api/v9/channels/${channelId}/messages/${messageId}`;
-        const proxyConfig = createProxyAxiosConfig(config);
         const response = await axios.get(url, {
             headers: getDiscordHeaders(token),
-            ...proxyConfig,
             timeout: 10000
         });
         logAll(config, { action: 'checkMessageExists', messageId, exists: true });
@@ -273,12 +258,10 @@ async function editMessage(token, channelId, messageId, newContent, config) {
     while (retryCount < maxRetries) {
         try {
             const url = `https://discord.com/api/v9/channels/${channelId}/messages/${messageId}`;
-            const proxyConfig = createProxyAxiosConfig(config);
             const response = await axios.patch(url, {
                 content: newContent
             }, {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             });
             logAll(config, { action: 'editMessage', url, response: response.data });
@@ -327,48 +310,6 @@ async function editMessage(token, channelId, messageId, newContent, config) {
     return null;
 }
 
-function loadProxiesFromFile() {
-    try {
-        if (fs.existsSync('proxies.txt')) {
-            const content = fs.readFileSync('proxies.txt', 'utf8');
-            const proxies = content.split('\n').filter(p => p.trim());
-            return proxies;
-        }
-    } catch (error) {
-        console.log(chalk.yellow('Warning: Could not load proxies from proxies.txt'));
-    }
-    return [];
-}
-
-function getRandomProxy(proxies) {
-    if (!proxies || proxies.length === 0) return null;
-    return proxies[Math.floor(Math.random() * proxies.length)];
-}
-
-function createProxyAxiosConfig(config) {
-    if (!config.proxiesEnabled) return {};
-    
-    const proxies = loadProxiesFromFile();
-    if (proxies.length === 0) {
-        console.log(chalk.yellow('No proxies available in proxies.txt'));
-        return {};
-    }
-    
-    const proxy = getRandomProxy(proxies);
-    if (!proxy) return {};
-    
-    try {
-        const agent = new HttpsProxyAgent(proxy.startsWith('http') ? proxy : `http://${proxy}`);
-        return {
-            httpsAgent: agent,
-            httpAgent: agent
-        };
-    } catch (error) {
-        console.log(chalk.yellow(`Warning: Invalid proxy format: ${proxy}`));
-        return {};
-    }
-}
-
 function getDiscordHeaders(token) {
     return {
         'authorization': token,
@@ -388,22 +329,28 @@ function getDiscordHeaders(token) {
     };
 }
 
+const pastelRed = (typeof global !== 'undefined' && global.pastelRed) || (chalk.hex ? chalk.hex('#ff5555').bold : chalk.red.bold);
+
+const originalPrompt = inquirer.prompt;
+inquirer.prompt = async function(questions, ...args) {
+    if (Array.isArray(questions)) {
+        questions = questions.map(q => ({
+            ...q,
+            message: q.message ? pastelRed(q.message) : q.message,
+            prefix: pastelRed('✔')
+        }))
+    } else if (questions && typeof questions === 'object') {
+        questions.message = questions.message ? pastelRed(questions.message) : questions.message;
+        questions.prefix = pastelRed('✔');
+    }
+    return originalPrompt.call(this, questions, ...args);
+}
+
 export async function run(config) {
     const token = config.token;
     if (!token) {
         console.log(chalk.red('No Discord token found in config.'));
         return;
-    }
-    
-    if (config.proxiesEnabled) {
-        const proxies = loadProxiesFromFile();
-        if (proxies.length > 0) {
-            console.log(chalk.green(`Using ${proxies.length} proxies for requests`));
-        } else {
-            console.log(chalk.yellow('Proxies enabled but no proxies found in proxies.txt'));
-        }
-    } else {
-        console.log(chalk.blue('Proxies disabled - using direct connection'));
     }
     
     const authorId = await fetchUserId(token, config);
@@ -548,5 +495,10 @@ export async function run(config) {
         }
     }
     
-    console.log(chalk.green('Done.'));
+    try {
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
+    } catch (error) {
+        console.log(chalk.red('An error occurred: ' + error.message));
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
+    }
 }

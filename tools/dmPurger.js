@@ -2,7 +2,6 @@ import inquirer from 'inquirer'
 import axios from 'axios'
 import chalk from 'chalk'
 import fs from 'fs'
-import { HttpsProxyAgent } from 'https-proxy-agent'
 
 export const name = 'DM Purger'
 export const description = 'Delete all messages from a DM conversation.'
@@ -16,40 +15,6 @@ function logAll(config, data) {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function loadProxiesFromFile() {
-    try {
-        if (fs.existsSync('proxies.txt')) {
-            const content = fs.readFileSync('proxies.txt', 'utf8')
-            const proxies = content.split('\n').filter(p => p.trim())
-            return proxies
-        }
-    } catch (error) {
-        return []
-    }
-    return []
-}
-
-function getRandomProxy(proxies) {
-    if (!proxies || proxies.length === 0) return null
-    return proxies[Math.floor(Math.random() * proxies.length)]
-}
-
-function createProxyAxiosConfig(config) {
-    if (!config.proxiesEnabled) return {}
-    const proxies = loadProxiesFromFile()
-    if (proxies.length === 0) return {}
-    const proxy = getRandomProxy(proxies)
-    if (!proxy) return {}
-    try {
-        return {
-            httpsAgent: new HttpsProxyAgent(`http://${proxy}`),
-            httpAgent: new HttpsProxyAgent(`http://${proxy}`)
-        }
-    } catch {
-        return {}
-    }
 }
 
 function getDiscordHeaders(token) {
@@ -74,11 +39,9 @@ function getDiscordHeaders(token) {
 async function fetchDMChannels(token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get('https://discord.com/api/v9/users/@me/channels', {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchDMChannels', count: response.data.length })
             return response.data
@@ -99,11 +62,9 @@ async function fetchMessages(channelId, token, config, beforeId = null) {
             const url = beforeId 
                 ? `https://discord.com/api/v9/channels/${channelId}/messages?limit=100&before=${beforeId}`
                 : `https://discord.com/api/v9/channels/${channelId}/messages?limit=100`
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(url, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchMessages', channelId, count: response.data.length })
             return response.data
@@ -121,11 +82,9 @@ async function fetchMessages(channelId, token, config, beforeId = null) {
 async function deleteMessage(channelId, messageId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             await axios.delete(`https://discord.com/api/v9/channels/${channelId}/messages/${messageId}`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             return { success: true, rateLimited: false }
         } catch (err) {
@@ -141,6 +100,23 @@ async function deleteMessage(channelId, messageId, token, config) {
             throw err
         }
     }
+}
+
+const pastelRed = (typeof global !== 'undefined' && global.pastelRed) || (chalk.hex ? chalk.hex('#ff5555').bold : chalk.red.bold)
+
+const originalPrompt = inquirer.prompt
+inquirer.prompt = async function(questions, ...args) {
+    if (Array.isArray(questions)) {
+        questions = questions.map(q => ({
+            ...q,
+            message: q.message ? pastelRed(q.message) : q.message,
+            prefix: pastelRed('✔')
+        }))
+    } else if (questions && typeof questions === 'object') {
+        questions.message = questions.message ? pastelRed(questions.message) : questions.message
+        questions.prefix = pastelRed('✔')
+    }
+    return originalPrompt.call(this, questions, ...args)
 }
 
 export async function run(config) {
@@ -253,7 +229,7 @@ export async function run(config) {
     let beforeId = null
     let currentUser = null
     let consecutiveSuccesses = 0
-    let baseDelay = 1000
+    let baseDelay = 500
     let currentDelay = baseDelay
 
     try {
@@ -316,5 +292,12 @@ export async function run(config) {
     console.log(chalk.cyan(`\n📊 Purge Summary:`))
     console.log(chalk.gray(`   👤 User: ${recipientName}`))
     console.log(chalk.gray(`   💬 Messages deleted: ${totalDeleted}`))
-    console.log(chalk.green(`\n✨ All done! Press any key to return to main menu...`))
+
+    try {
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
+    } catch (error) {
+        logAll(config, { action: 'pauseError', error: error.toString() })
+        console.log(chalk.red('Error while waiting to return to menu.'))
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
+    }
 }

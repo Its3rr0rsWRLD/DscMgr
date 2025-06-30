@@ -2,7 +2,6 @@ import inquirer from 'inquirer'
 import axios from 'axios'
 import chalk from 'chalk'
 import fs from 'fs'
-import { HttpsProxyAgent } from 'https-proxy-agent'
 
 export const name = 'Clone Server'
 export const description = 'Clone channels, roles, and settings from one server to another.'
@@ -16,47 +15,6 @@ function logAll(config, data) {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function loadProxiesFromFile() {
-    try {
-        if (fs.existsSync('proxies.txt')) {
-            const content = fs.readFileSync('proxies.txt', 'utf8')
-            const proxies = content.split('\n').filter(p => p.trim())
-            return proxies
-        }
-    } catch (error) {
-        console.log(chalk.yellow('Warning: Could not load proxies from proxies.txt'))
-    }
-    return []
-}
-
-function getRandomProxy(proxies) {
-    if (!proxies || proxies.length === 0) return null
-    return proxies[Math.floor(Math.random() * proxies.length)]
-}
-
-function createProxyAxiosConfig(config) {
-    if (!config.proxiesEnabled) return {}
-    
-    const proxies = loadProxiesFromFile()
-    if (proxies.length === 0) {
-        console.log(chalk.yellow('No proxies available in proxies.txt'))
-        return {}
-    }
-    
-    const proxy = getRandomProxy(proxies)
-    if (!proxy) return {}
-    
-    try {
-        return {
-            httpsAgent: new HttpsProxyAgent(`http://${proxy}`),
-            httpAgent: new HttpsProxyAgent(`http://${proxy}`)
-        }
-    } catch (error) {
-        console.log(chalk.yellow(`Failed to create proxy agent: ${error.message}`))
-        return {}
-    }
 }
 
 function getDiscordHeaders(token) {
@@ -81,11 +39,9 @@ function getDiscordHeaders(token) {
 async function fetchGuildInfo(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchGuildInfo', guildId, response: response.data })
             return response.data
@@ -105,11 +61,9 @@ async function fetchGuildInfo(guildId, token, config) {
 async function fetchGuildChannels(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/channels`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchGuildChannels', guildId, response: response.data })
             return response.data
@@ -129,11 +83,9 @@ async function fetchGuildChannels(guildId, token, config) {
 async function fetchGuildRoles(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/roles`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchGuildRoles', guildId, response: response.data })
             return response.data
@@ -161,11 +113,9 @@ async function createRole(guildId, roleData, token, config) {
                 permissions: roleData.permissions
             }
             
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.post(`https://discord.com/api/v9/guilds/${guildId}/roles`, cleanRoleData, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'createRole', guildId, roleData: cleanRoleData, response: response.data })
             return response.data
@@ -196,11 +146,9 @@ async function createChannel(guildId, channelData, token, config) {
                 permission_overwrites: channelData.permission_overwrites || []
             }
             
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.post(`https://discord.com/api/v9/guilds/${guildId}/channels`, cleanChannelData, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'createChannel', guildId, channelData: cleanChannelData, response: response.data })
             return response.data
@@ -228,11 +176,9 @@ async function updateGuildSettings(guildId, guildData, token, config) {
                 explicit_content_filter: guildData.explicit_content_filter
             }
             
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.patch(`https://discord.com/api/v9/guilds/${guildId}`, cleanGuildData, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'updateGuildSettings', guildId, guildData: cleanGuildData, response: response.data })
             return response.data
@@ -252,13 +198,11 @@ async function updateGuildSettings(guildId, guildData, token, config) {
 async function clearTargetServer(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             let emojis = []
             try {
                 const emojiRes = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/emojis`, {
                     headers: getDiscordHeaders(token),
-                    timeout: 10000,
-                    ...proxyConfig
+                    timeout: 10000
                 })
                 emojis = emojiRes.data
             } catch {}
@@ -268,8 +212,7 @@ async function clearTargetServer(guildId, token, config) {
                     try {
                         await axios.delete(`https://discord.com/api/v9/guilds/${guildId}/emojis/${emoji.id}`, {
                             headers: getDiscordHeaders(token),
-                            timeout: 10000,
-                            ...proxyConfig
+                            timeout: 10000
                         })
                         break
                     } catch (err) {
@@ -287,8 +230,7 @@ async function clearTargetServer(guildId, token, config) {
             try {
                 const chRes = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/channels`, {
                     headers: getDiscordHeaders(token),
-                    timeout: 10000,
-                    ...proxyConfig
+                    timeout: 10000
                 })
                 channels = chRes.data
             } catch {}
@@ -298,8 +240,7 @@ async function clearTargetServer(guildId, token, config) {
                     try {
                         await axios.delete(`https://discord.com/api/v9/channels/${ch.id}`, {
                             headers: getDiscordHeaders(token),
-                            timeout: 10000,
-                            ...proxyConfig
+                            timeout: 10000
                         })
                         break
                     } catch (err) {
@@ -317,8 +258,7 @@ async function clearTargetServer(guildId, token, config) {
             try {
                 const roleRes = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/roles`, {
                     headers: getDiscordHeaders(token),
-                    timeout: 10000,
-                    ...proxyConfig
+                    timeout: 10000
                 })
                 roles = roleRes.data
             } catch {}
@@ -328,8 +268,7 @@ async function clearTargetServer(guildId, token, config) {
                     try {
                         await axios.delete(`https://discord.com/api/v9/guilds/${guildId}/roles/${role.id}`, {
                             headers: getDiscordHeaders(token),
-                            timeout: 10000,
-                            ...proxyConfig
+                            timeout: 10000
                         })
                         break
                     } catch (err) {
@@ -355,6 +294,23 @@ async function clearTargetServer(guildId, token, config) {
     }
 }
 
+const pastelRed = (typeof global !== 'undefined' && global.pastelRed) || (chalk.hex ? chalk.hex('#ff5555').bold : chalk.red.bold)
+
+const originalPrompt = inquirer.prompt
+inquirer.prompt = async function(questions, ...args) {
+    if (Array.isArray(questions)) {
+        questions = questions.map(q => ({
+            ...q,
+            message: q.message ? pastelRed(q.message) : q.message,
+            prefix: pastelRed('✔')
+        }))
+    } else if (questions && typeof questions === 'object') {
+        questions.message = questions.message ? pastelRed(questions.message) : questions.message
+        questions.prefix = pastelRed('✔')
+    }
+    return originalPrompt.call(this, questions, ...args)
+}
+
 export async function run(config) {
     let token = config && config.token ? config.token : process.env.DISCORD_TOKEN
     if (!token || token.length < 10) {
@@ -362,7 +318,7 @@ export async function run(config) {
             {
                 type: 'input',
                 name: 'inputToken',
-                message: 'Enter your Discord token:',
+                message: pastelRed('Enter your Discord token:'),
                 validate: input => input.length > 10
             }
         ])
@@ -373,7 +329,7 @@ export async function run(config) {
         {
             type: 'input',
             name: 'sourceGuildId',
-            message: 'Enter the source server ID (to clone FROM):',
+            message: pastelRed('Enter the source server ID (to clone FROM):'),
             validate: input => input.length > 10
         }
     ])
@@ -382,7 +338,7 @@ export async function run(config) {
         {
             type: 'input',
             name: 'targetGuildId',
-            message: 'Enter the target server ID (to clone TO):',
+            message: pastelRed('Enter the target server ID (to clone TO):'),
             validate: input => input.length > 10
         }
     ])
@@ -405,7 +361,7 @@ export async function run(config) {
             {
                 type: 'confirm',
                 name: 'confirm',
-                message: `Are you sure you want to clone "${sourceGuild.name}" into "${targetGuild.name}"? This will DELETE all channels, roles, and emojis in the target server and create new ones.`,
+                message: `${pastelRed('Are you sure you want to clone')} "${sourceGuild.name}" ${pastelRed('into')} "${targetGuild.name}"? ${pastelRed('This will DELETE all channels, roles, and emojis in the target server and create new ones.')}`,
                 default: true
             }
         ])
@@ -428,8 +384,7 @@ export async function run(config) {
                         permissions: sourceEveryone.permissions
                     }, {
                         headers: getDiscordHeaders(token),
-                        timeout: 10000,
-                        ...createProxyAxiosConfig(config)
+                        timeout: 10000
                     })
                     break
                 } catch (err) {
@@ -529,10 +484,11 @@ export async function run(config) {
         console.log(chalk.gray(`   🎭 Roles: ${rolesToClone.length} processed`))
         console.log(chalk.gray(`   📁 Categories: ${categories.length} processed`))
         console.log(chalk.gray(`   💬 Channels: ${regularChannels.length} processed`))
-        console.log(chalk.green(`\n✨ Clone complete! Press any key to return to main menu...`))
         
     } catch (error) {
         console.log(chalk.red(`\n❌ Clone failed: ${error.message}`))
         console.log(chalk.yellow('Check the logs for more details.'))
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
     }
+    await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
 }

@@ -3,7 +3,6 @@ import axios from 'axios'
 import chalk from 'chalk'
 import fs from 'fs'
 import path from 'path'
-import { HttpsProxyAgent } from 'https-proxy-agent'
 
 export const name = 'Scrape User Messages'
 export const description = 'Scrape all messages from a user in mutual servers.'
@@ -17,47 +16,6 @@ function logAll(config, data) {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function loadProxiesFromFile() {
-    try {
-        if (fs.existsSync('proxies.txt')) {
-            const content = fs.readFileSync('proxies.txt', 'utf8')
-            const proxies = content.split('\n').filter(p => p.trim())
-            return proxies
-        }
-    } catch (error) {
-        console.log(chalk.yellow('Warning: Could not load proxies from proxies.txt'))
-    }
-    return []
-}
-
-function getRandomProxy(proxies) {
-    if (!proxies || proxies.length === 0) return null
-    return proxies[Math.floor(Math.random() * proxies.length)]
-}
-
-function createProxyAxiosConfig(config) {
-    if (!config.proxiesEnabled) return {}
-    
-    const proxies = loadProxiesFromFile()
-    if (proxies.length === 0) {
-        console.log(chalk.yellow('No proxies available in proxies.txt'))
-        return {}
-    }
-    
-    const proxy = getRandomProxy(proxies)
-    if (!proxy) return {}
-    
-    try {
-        return {
-            httpsAgent: new HttpsProxyAgent(`http://${proxy}`),
-            httpAgent: new HttpsProxyAgent(`http://${proxy}`)
-        }
-    } catch (error) {
-        console.log(chalk.yellow(`Failed to create proxy agent: ${error.message}`))
-        return {}
-    }
 }
 
 function getDiscordHeaders(token) {
@@ -82,10 +40,8 @@ async function fetchMutualGuilds(token, userId, config) {
     while (true) {
         try {
             const url = `https://discord.com/api/v9/users/${userId}/profile?type=popout&with_mutual_guilds=true&with_mutual_friends=true&with_mutual_friends_count=false`
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(url, { 
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             })
             logAll(config, { action: 'fetchMutualGuilds', url, response: response.data })
@@ -108,10 +64,8 @@ async function fetchGuildName(token, guildId, config) {
     while (true) {
         try {
             const url = `https://discord.com/api/v9/guilds/${guildId}`
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(url, { 
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             })
             logAll(config, { action: 'fetchGuildName', url, response: response.data })
@@ -134,10 +88,8 @@ async function fetchChannels(token, guildId, config) {
     while (true) {
         try {
             const url = `https://discord.com/api/v9/guilds/${guildId}/channels`
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(url, {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             })
             logAll(config, { action: 'fetchChannels', url, response: response.data })
@@ -162,10 +114,8 @@ async function searchMessages(token, channelId, authorId, config) {
     while (retryCount < maxRetries) {
         try {
             const url = `https://discord.com/api/v9/channels/${channelId}/messages/search?author_id=${authorId}`;
-            const proxyConfig = createProxyAxiosConfig(config);
             const response = await axios.get(url, {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             });
             logAll(config, { action: 'searchMessages', url, response: response.data });
@@ -204,10 +154,8 @@ async function searchMessagesInGuild(token, guildId, authorId, config) {
     while (retryCount < maxRetries) {
         try {
             const url = `https://discord.com/api/v9/guilds/${guildId}/messages/search?author_id=${authorId}`;
-            const proxyConfig = createProxyAxiosConfig(config);
             const response = await axios.get(url, {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             });
             logAll(config, { action: 'searchMessagesInGuild', url, response: response.data });
@@ -240,6 +188,23 @@ async function searchMessagesInGuild(token, guildId, authorId, config) {
     return [];
 }
 
+const pastelRed = (typeof global !== 'undefined' && global.pastelRed) || (chalk.hex ? chalk.hex('#ff5555').bold : chalk.red.bold)
+
+const originalPrompt = inquirer.prompt
+inquirer.prompt = async function(questions, ...args) {
+    if (Array.isArray(questions)) {
+        questions = questions.map(q => ({
+            ...q,
+            message: q.message ? pastelRed(q.message) : q.message,
+            prefix: pastelRed('✔')
+        }))
+    } else if (questions && typeof questions === 'object') {
+        questions.message = questions.message ? pastelRed(questions.message) : questions.message
+        questions.prefix = pastelRed('✔')
+    }
+    return originalPrompt.call(this, questions, ...args)
+}
+
 export async function run(config) {
     let token = config && config.token ? config.token : process.env.DISCORD_TOKEN
     if (!token || token.length < 10) {
@@ -247,7 +212,7 @@ export async function run(config) {
             {
                 type: 'input',
                 name: 'inputToken',
-                message: 'Enter your Discord token:',
+                message: pastelRed('Enter your Discord token:'),
                 validate: input => input.length > 10
             }
         ])
@@ -258,7 +223,7 @@ export async function run(config) {
         {
             type: 'input',
             name: 'userId',
-            message: 'Enter the user ID to scrape:',
+            message: pastelRed('Enter the user ID to scrape:'),
             validate: input => input.length > 10
         }
     ])
@@ -281,7 +246,7 @@ export async function run(config) {
         {
             type: 'list',
             name: 'guildChoice',
-            message: 'Select a server to scrape or all:',
+            message: pastelRed('Select a server to scrape or all:'),
             choices: [
                 { name: 'All Mutual Servers', value: 'all' },
                 ...guildChoices
@@ -356,5 +321,11 @@ export async function run(config) {
     console.log(chalk.gray(`   🏢 Servers processed: ${guildIds.length}`))
     console.log(chalk.gray(`   💬 Total messages found: ${totalMessages}`))
     console.log(chalk.gray(`   📁 Save file: ${path.basename(savePath)}`))
-    console.log(chalk.green(`\n✨ All done! Press any key to return to main menu...`))
+
+    try {
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
+    } catch (error) {
+        console.log(chalk.red('Error while waiting to return to menu:', error.message))
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
+    }
 }

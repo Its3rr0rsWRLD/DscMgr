@@ -3,7 +3,6 @@ import axios from 'axios'
 import chalk from 'chalk'
 import fs from 'fs'
 import path from 'path'
-import { HttpsProxyAgent } from 'https-proxy-agent'
 
 export const name = 'Server Saver'
 export const description = 'Save all server data (channels, roles, emojis, settings) to JSON for cloning.'
@@ -17,47 +16,6 @@ function logAll(config, data) {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function loadProxiesFromFile() {
-    try {
-        if (fs.existsSync('proxies.txt')) {
-            const content = fs.readFileSync('proxies.txt', 'utf8')
-            const proxies = content.split('\n').filter(p => p.trim())
-            return proxies
-        }
-    } catch (error) {
-        console.log(chalk.yellow('Warning: Could not load proxies from proxies.txt'))
-    }
-    return []
-}
-
-function getRandomProxy(proxies) {
-    if (!proxies || proxies.length === 0) return null
-    return proxies[Math.floor(Math.random() * proxies.length)]
-}
-
-function createProxyAxiosConfig(config) {
-    if (!config.proxiesEnabled) return {}
-    
-    const proxies = loadProxiesFromFile()
-    if (proxies.length === 0) {
-        console.log(chalk.yellow('No proxies available in proxies.txt'))
-        return {}
-    }
-    
-    const proxy = getRandomProxy(proxies)
-    if (!proxy) return {}
-    
-    try {
-        return {
-            httpsAgent: new HttpsProxyAgent(`http://${proxy}`),
-            httpAgent: new HttpsProxyAgent(`http://${proxy}`)
-        }
-    } catch (error) {
-        console.log(chalk.yellow(`Failed to create proxy agent: ${error.message}`))
-        return {}
-    }
 }
 
 function getDiscordHeaders(token) {
@@ -82,11 +40,9 @@ function getDiscordHeaders(token) {
 async function fetchGuildInfo(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchGuildInfo', guildId, response: response.data })
             return response.data
@@ -106,11 +62,9 @@ async function fetchGuildInfo(guildId, token, config) {
 async function fetchGuildChannels(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/channels`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchGuildChannels', guildId, channelCount: response.data.length })
             return response.data
@@ -130,11 +84,9 @@ async function fetchGuildChannels(guildId, token, config) {
 async function fetchGuildRoles(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/roles`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchGuildRoles', guildId, roleCount: response.data.length })
             return response.data
@@ -154,11 +106,9 @@ async function fetchGuildRoles(guildId, token, config) {
 async function fetchGuildEmojis(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/emojis`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchGuildEmojis', guildId, emojiCount: response.data.length })
             return response.data
@@ -178,11 +128,9 @@ async function fetchGuildEmojis(guildId, token, config) {
 async function fetchGuildStickers(guildId, token, config) {
     while (true) {
         try {
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(`https://discord.com/api/v9/guilds/${guildId}/stickers`, {
                 headers: getDiscordHeaders(token),
-                timeout: 10000,
-                ...proxyConfig
+                timeout: 10000
             })
             logAll(config, { action: 'fetchGuildStickers', guildId, stickerCount: response.data.length })
             return response.data
@@ -203,10 +151,8 @@ async function fetchMutualGuilds(token, config) {
     while (true) {
         try {
             const url = `https://discord.com/api/v9/users/@me/guilds`
-            const proxyConfig = createProxyAxiosConfig(config)
             const response = await axios.get(url, {
                 headers: getDiscordHeaders(token),
-                ...proxyConfig,
                 timeout: 10000
             })
             return response.data
@@ -273,7 +219,7 @@ export async function run(config) {
         const serverData = {
             metadata: {
                 savedAt: new Date().toISOString(),
-                savedBy: 'DscMgr Server Saver',
+                savedBy: 'Ryzor.cc Server Saver',
                 version: '1.0.0'
             },
             guild: {
@@ -388,10 +334,28 @@ export async function run(config) {
         console.log(chalk.green(`\n✨ Server data saved! This file can be used to clone the server later.`))
         
         logAll(config, { action: 'serverSaveCompleted', filepath, stats: serverData.stats })
-        
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
     } catch (error) {
         console.log(chalk.red(`\n❌ Save failed: ${error.message}`))
         console.log(chalk.yellow('Check the logs for more details.'))
         logAll(config, { action: 'serverSaveFailed', error: error.toString() })
+        await inquirer.prompt({ type: 'input', name: 'pause', message: 'Press Enter to return to menu...' })
     }
+}
+
+const pastelRed = (typeof global !== 'undefined' && global.pastelRed) || (chalk.hex ? chalk.hex('#ff5555').bold : chalk.red.bold)
+
+const originalPrompt = inquirer.prompt
+inquirer.prompt = async function(questions, ...args) {
+    if (Array.isArray(questions)) {
+        questions = questions.map(q => ({
+            ...q,
+            message: q.message ? pastelRed(q.message) : q.message,
+            prefix: pastelRed('✔')
+        }))
+    } else if (questions && typeof questions === 'object') {
+        questions.message = questions.message ? pastelRed(questions.message) : questions.message
+        questions.prefix = pastelRed('✔')
+    }
+    return originalPrompt.call(this, questions, ...args)
 }

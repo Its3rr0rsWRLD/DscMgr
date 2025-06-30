@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="assets/banner.gif" alt="DscMgr Logo" width="" />
-  <h1 style="font-size:3em; margin-bottom:0.2em;">DscMgr</h1>
+  <img src="assets/banner.gif" alt="Ryzor.cc Logo" width="" />
+  <h1 style="font-size:3em; margin-bottom:0.2em;">Ryzor.cc</h1>
   <h3 style="color:#7289da; margin-top:0;">The Ultimate Discord Message Management CLI</h3>
   <p><b>Delete, edit, and search your Discord messages with speed, privacy, and style.</b></p>
   <img src="https://img.shields.io/badge/Discord-Manager-blueviolet?style=for-the-badge&logo=discord" />
@@ -35,8 +35,8 @@
 
 ```bash
 # Clone the repo
-$ git clone https://github.com/its3rr0rswrld/DscMgr.git
-$ cd DscMgr
+$ git clone https://github.com/its3rr0rswrld/Ryzor.cc.git
+$ cd Ryzor.cc
 
 # Install dependencies
 $ npm install
