@@ -229,7 +229,7 @@ export async function run(config) {
     let beforeId = null
     let currentUser = null
     let consecutiveSuccesses = 0
-    let baseDelay = 500
+    let baseDelay = 250
     let currentDelay = baseDelay
 
     try {
@@ -264,11 +264,11 @@ export async function run(config) {
                     
                     if (result.rateLimited) {
                         consecutiveSuccesses = 0
-                        currentDelay = baseDelay
+                        currentDelay = 1000
                     } else {
                         consecutiveSuccesses++
-                        if (consecutiveSuccesses >= 5) {
-                            currentDelay = Math.max(200, currentDelay * 0.8)
+                        if (consecutiveSuccesses >= 3) {
+                            currentDelay = Math.max(10, currentDelay * 0.5)
                             consecutiveSuccesses = 0
                         }
                         await sleep(currentDelay)

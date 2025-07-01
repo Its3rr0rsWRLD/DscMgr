@@ -72,8 +72,17 @@ Absolutely. You can search, edit, and delete in DMs, group DMs, and any server y
 </details>
 
 <details>
-<summary><b>How do I use proxies?</b></summary>
-Put your proxies in <code>proxies.txt</code> (one per line). Enable proxy mode in the settings menu.
+<summary><b>What all tools are included?</b></summary>
+
+- <b>Server Cloner</b>: Clone server messages to another server
+
+- <b>DM Purger</b>: Delete all messages in a DM
+
+- <b>Keyword Deleter</b>: Delete/Edit messages containing specific keywords
+
+- <b>Message Scraper</b>: Search and scrape messages by user
+
+- <b>Server Saver</b>: Save server messages to a JSON file
 </details>
 
 ---
