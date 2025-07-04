@@ -20,7 +20,7 @@ function showBanner() {
   \\ \\   | |_) | | | | | |_  /  / _ \\  | '__|      / __|  / __|
   / /   |  _ <  | |_| |  / /  | (_) | | |     _  | (__  | (__
  /_/    |_| \\_\\  \\__, | /___|  \\___/  |_|    (_)  \\___|  \\___|
-                 |___/  @its3rr0rswrld`
+                 |___/  Github: @its3rr0rswrld / Discord: @wtf3rr0r`
     console.log(chalk.red(bannerText.split('@')[0]) + chalk.gray.dim('@its3rr0rswrld'))
     console.log("\n")
 }
